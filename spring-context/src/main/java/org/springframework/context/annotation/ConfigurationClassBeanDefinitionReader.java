@@ -115,6 +115,7 @@ class ConfigurationClassBeanDefinitionReader {
 	 * with the registry based on its contents.
 	 */
 	public void loadBeanDefinitions(Set<ConfigurationClass> configurationModel) {
+		// 这个类就是用于判断 @Condition 注解是否成立的
 		TrackedConditionEvaluator trackedConditionEvaluator = new TrackedConditionEvaluator();
 		for (ConfigurationClass configClass : configurationModel) {
 			loadBeanDefinitionsForConfigurationClass(configClass, trackedConditionEvaluator);
@@ -129,6 +130,7 @@ class ConfigurationClassBeanDefinitionReader {
 			ConfigurationClass configClass, TrackedConditionEvaluator trackedConditionEvaluator) {
 
 		if (trackedConditionEvaluator.shouldSkip(configClass)) {
+			// 如果这个配置类被判定跳过，则从 registry 移除它的信息
 			String beanName = configClass.getBeanName();
 			if (StringUtils.hasLength(beanName) && this.registry.containsBeanDefinition(beanName)) {
 				this.registry.removeBeanDefinition(beanName);
@@ -138,9 +140,12 @@ class ConfigurationClassBeanDefinitionReader {
 		}
 
 		if (configClass.isImported()) {
+			// 如果这个配置类是被 @Import 导入的，则将这个配置类自己注册成 BeanDefinition
 			registerBeanDefinitionForImportedConfigurationClass(configClass);
 		}
+
 		for (BeanMethod beanMethod : configClass.getBeanMethods()) {
+			// 注册这个配置类中 @Bean 方法返回的类为 BeanDefinition
 			loadBeanDefinitionsForBeanMethod(beanMethod);
 		}
 
@@ -179,6 +184,7 @@ class ConfigurationClassBeanDefinitionReader {
 		MethodMetadata metadata = beanMethod.getMetadata();
 		String methodName = metadata.getMethodName();
 
+		// 判断这个 Bean 是否满足所有 @Condition, 有一个不满足则 skip
 		// Do we need to mark the bean as skipped by its condition?
 		if (this.conditionEvaluator.shouldSkip(metadata, ConfigurationPhase.REGISTER_BEAN)) {
 			configClass.skippedBeanMethods.add(methodName);
@@ -210,6 +216,7 @@ class ConfigurationClassBeanDefinitionReader {
 			return;
 		}
 
+		// 创建了对应的 BeanDefinition，下面就是解析一系列参数 包括 initMethod、destroyMethod、Scope 等等
 		ConfigurationClassBeanDefinition beanDef = new ConfigurationClassBeanDefinition(configClass, metadata, beanName);
 		beanDef.setSource(this.sourceExtractor.extractSource(metadata, configClass.getResource()));
 
@@ -454,6 +461,7 @@ class ConfigurationClassBeanDefinitionReader {
 			Boolean skip = this.skipped.get(configClass);
 			if (skip == null) {
 				if (configClass.isImported()) {
+					// 如果这个配置类是通过 @Import 进行导入的，判断一下进行 @Import 的这个类是否被过滤了
 					boolean allSkipped = true;
 					for (ConfigurationClass importedBy : configClass.getImportedBy()) {
 						if (!shouldSkip(importedBy)) {
@@ -461,12 +469,14 @@ class ConfigurationClassBeanDefinitionReader {
 							break;
 						}
 					}
+					// 如果所有标注了这个 @Import 的类都被过滤了，那这个被 Import 的这个配置类也应该被过滤
 					if (allSkipped) {
 						// The config classes that imported this one were all skipped, therefore we are skipped...
 						skip = true;
 					}
 				}
 				if (skip == null) {
+					// 对配置类进行 Condition 评估，如果条件有一个不成立，则 skip = true，该配置类被跳过
 					skip = conditionEvaluator.shouldSkip(configClass.getMetadata(), ConfigurationPhase.REGISTER_BEAN);
 				}
 				this.skipped.put(configClass, skip);
